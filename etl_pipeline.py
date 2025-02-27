@@ -9,7 +9,7 @@ import nltk
 import string
 import seaborn as sns
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
-from transformers import DistilBertTokenizer
+from transformers import DistilBertTokenizer, TFDistilBertModel
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from collections import Counter
@@ -19,8 +19,19 @@ from wordcloud import WordCloud
 nltk.download('punkt')
 nltk.download('stopwords')
 
-# Load the trained model
-model = tf.keras.models.load_model('sarcasm_model.h5')  # Replace with your model path
+# Define the custom DistilBERTLayer
+class DistilBERTLayer(tf.keras.layers.Layer):
+    def __init__(self, model_name='distilbert-base-multilingual-cased', **kwargs):
+        super(DistilBERTLayer, self).__init__(**kwargs)
+        self.model = TFDistilBertModel.from_pretrained(model_name)
+
+    def call(self, inputs):
+        input_ids, attention_mask = inputs
+        return self.model(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+
+# Register the custom layer and load the model
+with tf.keras.utils.custom_object_scope({'DistilBERTLayer': DistilBERTLayer}):
+    model = tf.keras.models.load_model('sarcasm_model.h5')  # Replace with your model path
 
 # Load the tokenizer
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-multilingual-cased')
@@ -64,6 +75,11 @@ def generate_predictions(df):
 
 # Function to evaluate predictions
 def evaluate_predictions(true_labels, predicted_labels):
+    # Convert true_labels to integers if they are strings
+    if isinstance(true_labels[0], str):
+        label_mapping = {'NO': 0, 'YES': 1}  # Adjust based on your dataset
+        true_labels = np.array([label_mapping[label] for label in true_labels])
+    
     # Classification report
     print("Classification Report:")
     print(classification_report(true_labels, predicted_labels))
